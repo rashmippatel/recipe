@@ -1,0 +1,300 @@
+You are my senior full-stack dev. Build a production-quality web app in one repo. If something’s ambiguous, choose sensible defaults and document them in README.md under “Assumptions”.
+
+Goal
+
+A recipe helper with two workflows:
+
+Workflow 1 (Find Recipes): user selects ingredients on hand (+ quantities), sets max cook time, meal of the day, veg/non-veg filter, and can toggle “include a few famous recipes”. Output: top 3 recipes that best match all criteria using a deterministic score.
+
+Workflow 2 (Favorites DB): user can save favorite recipes with full details (ingredients, per-ingredient quantity, instructions, cooking time, veg flag, meal type(s), and source like website or YouTube). Provide CRUD UI + API.
+
+Tech & Project Setup
+
+Frontend: Vite + React + TypeScript, Tailwind CSS (dark mode via prefers-color-scheme + toggle), React Router, React Hook Form + Zod, TanStack Query.
+
+Backend: Node + Express + TypeScript.
+
+DB: SQLite via Prisma ORM (single file, works on Replit). Prisma migrate + seed.
+
+Testing: Vitest + React Testing Library (frontend), supertest (backend).
+
+Quality: ESLint + Prettier; strict TS; basic a11y checks (axe in tests).
+
+Dev scripts: dev (concurrently run client/server), build, start, test, db:reset (prisma migrate reset && prisma db seed).
+
+UX & Pages
+
+Navbar: brand, links (Find Recipes, Add Recipe, Favorites), theme toggle.
+
+/ (Home): brief hero explaining both workflows + CTA buttons.
+
+/find (Workflow 1):
+Left panel (filters):
+
+Ingredients on hand: searchable multi-select + quantity input per selected item (g/ml/pcs).
+
+Max cook time (minutes): number input.
+
+Meal of the day: radio (Breakfast, Lunch, Evening Snack, Dinner).
+
+Veg only: checkbox.
+
+Include famous recipes: checkbox (adds a small curated set into the candidate pool).
+Right panel: results list (top 3) with score badge, cook time, veg tag, meal tags, “View”, “Save to Favorites”.
+
+/favorites (Workflow 2): table + filters (search by name/source/veg/meal), “Add new”, row actions (view/edit/delete).
+
+/favorites/new & /favorites/:id/edit: full form with validation.
+
+/favorites/:id: recipe detail view (read only) with “Edit”, “Delete”.
+
+/legal/privacy and /legal/terms placeholder pages.
+
+404 with helpful links.
+
+Components (Accessible)
+
+Button, Input, Select, NumberField, Badge, Card, Tag, Modal (for delete confirm), FormField wrappers, SearchableMultiSelect (keyboard friendly), RecipeCard, EmptyState, Toast.
+
+Data Model (Prisma)
+model Recipe {
+  id            String   @id @default(cuid())
+  name          String
+  isVeg         Boolean  @default(true)
+  cookTimeMin   Int
+  mealTypes     String[] // ["Breakfast","Lunch","Evening Snack","Dinner"]
+  instructions  String
+  sourceType    String   // "website" | "youtube" | "book" | "other"
+  sourceUrl     String?  // nullable
+  famous        Boolean  @default(false) // for Workflow 1 toggle
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  ingredients   IngredientOnRecipe[]
+}
+
+model Ingredient {
+  id    String  @id @default(cuid())
+  name  String  @unique
+  unit  String? // "g" | "ml" | "pcs" | null
+  recipes IngredientOnRecipe[]
+}
+
+model IngredientOnRecipe {
+  id          String   @id @default(cuid())
+  recipeId    String
+  ingredientId String
+  quantity    Float    // required amount for the recipe (in Ingredient.unit if present)
+  recipe      Recipe   @relation(fields: [recipeId], references: [id])
+  ingredient  Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([recipeId, ingredientId])
+}
+
+Seed Data
+
+Populate ~20 common ingredients (tomato, onion, potato, egg, milk, flour, rice, lentils, spinach, paneer, chicken, garlic, ginger, chili, oil, butter, turmeric, cumin, coriander, salt).
+
+Add ~12 recipes covering veg + non-veg, different meals & times, e.g.:
+
+Veg: Masala Omelette (veg=false), Poha (veg), Veg Sandwich (veg), Aloo Paratha (veg), Paneer Bhurji (veg), Spinach Dal (veg), Tomato Soup (veg).
+
+Non-veg: Chicken Curry, Grilled Chicken Wrap, Egg Fried Rice (veg=false).
+
+Mark a few as famous=true (e.g., Butter Chicken, Margherita Pizza) with reasonable ingredient lists & instructions.
+
+Provide realistic quantity per ingredient and unit consistency.
+
+API Design (Express, JSON)
+
+Prefix: /api.
+
+GET /recipes/search — Query params:
+
+ingredients (CSV of ingredient names),
+
+quantities (CSV matching order, float),
+
+maxTime (int minutes),
+
+meal (one of 4),
+
+vegOnly (boolean),
+
+includeFamous (boolean).
+Returns top 3 recipes with match breakdown and score.
+
+GET /ingredients?query=tom — fuzzy search by name.
+
+Favorites share the same Recipe model (we use one set); marking favorite creates a link in client state OR create a simple favorites table:
+
+model Favorite {
+  id       String  @id @default(cuid())
+  recipeId String
+  note     String?
+  createdAt DateTime @default(now())
+  recipe   Recipe  @relation(fields: [recipeId], references: [id])
+  @@unique([recipeId])
+}
+
+
+Favorites API:
+
+POST /favorites { recipeId, note? }
+
+GET /favorites
+
+DELETE /favorites/:id
+
+CRUD Recipes (Workflow 2 admin forms):
+
+POST /recipes
+
+GET /recipes/:id
+
+PUT /recipes/:id
+
+DELETE /recipes/:id
+
+Add Zod validation on all request bodies. Return proper error codes + messages.
+
+Matching Algorithm (Workflow 1)
+
+Implement a deterministic scoring function on the server:
+
+Filters (hard constraints):
+
+If vegOnly=true then exclude recipes with isVeg=false.
+
+If meal provided, only include recipes where mealTypes includes that meal.
+
+If maxTime provided, only include recipes where cookTimeMin <= maxTime.
+
+If includeFamous=false, set candidatePool = all recipes where famous=false; else all recipes.
+
+Ingredient availability & quantity match:
+
+Input: array of {ingredientName, qtyAvailable}. Normalize names (case-insensitive).
+
+For each recipe:
+
+Let R = required ingredients set.
+
+Let A = available ingredients set (user input).
+
+Compute:
+
+coverage = |R ∩ A| / |R| (0..1).
+
+quantitySatisfaction: for each ingredient in R ∩ A, contribute 1 if qtyAvailable >= recipe.requiredQty else contribute qtyAvailable / requiredQty. Average over R. (If ingredient not available, contributes 0.)
+
+score = 0.60 * coverage + 0.30 * quantitySatisfaction + 0.10 * freshnessBoost, where:
+
+freshnessBoost = 0.1 if recipe’s cookTimeMin <= maxTime/2 (encourages quicker options), else 0.
+
+Exact match prioritization: If coverage === 1 and quantitySatisfaction === 1, add +0.25 bonus.
+
+Sort by score desc; return top 3 with a breakdown: coverage, quantitySatisfaction, bonusApplied, finalScore.
+
+Document the formula in README.md.
+
+Frontend – Workflow 1 UI
+
+Ingredients selector: searchable multi-select. After selecting an ingredient, show an inline number field for quantity (unit label shown). Allow editing/removing chips. Persist selection in URL (querystring) so it’s shareable.
+
+Time / Meal / Veg / Famous toggles as described.
+
+Result cards: show name, cook time, veg badge, meal tags, a score (0–100) (convert from 0–1). Buttons: “View Recipe” (modal or route) and “Save to Favorites”.
+
+Handle empty state + skeleton loading.
+
+Frontend – Workflow 2 (Favorites)
+
+List view: paginated table with columns: Name, Veg, Cook Time, Meal Types, Source (favicon if website/YouTube), Created.
+
+Add/Edit form: fields:
+
+Name (string, required)
+
+Veg (checkbox)
+
+Cook Time (int minutes, min 1)
+
+Meal Types (multi-select)
+
+Ingredients: dynamic rows with ingredient selector (or free text add + unit) and required quantity
+
+Instructions (textarea, required, min length)
+
+Source Type (select: website | youtube | book | other)
+
+Source URL (url, optional; if youtube, validate)
+
+On save, create/update Recipe + upsert Ingredient + IngredientOnRecipe.
+
+Delete with confirmation modal.
+
+Accessibility & SEO
+
+Semantic HTML, labels tied to inputs, visible focus, color contrast ≥ 4.5:1.
+
+Helmet-like meta tags per route: title, description, Open Graph.
+
+Add JSON-LD Recipe schema to recipe detail page (name, cookTime, recipeIngredient, recipeInstructions, vegetarian).
+
+Error Handling & Empty States
+
+Toasts for success/error.
+
+Friendly server errors with code, message.
+
+Validation messages inline under fields.
+
+Security & Misc
+
+Server-side input validation (Zod) + escaping.
+
+CORS configured for same-origin dev.
+
+No auth (document how to add later).
+
+Tests (write a few)
+
+Matching function: unit tests for:
+
+exact match (all ingredients & qty) → high score w/ bonus
+
+partial match → lower score
+
+vegOnly excludes non-veg
+
+time filter
+
+meal filter
+
+API: GET /recipes/search happy path + invalid params.
+
+UI: render /find, select ingredients, confirm 3 result cards max.
+
+Developer Experience
+
+Add README.md with:
+
+How to run (dev/build), seed, test.
+
+Data model diagram (mermaid).
+
+Matching formula & examples.
+
+How to extend (nutrition, pantry units, import-from-URL idea).
+
+Nice-to-haves (implement if quick)
+
+“Add ingredient not in list” inline on form.
+
+Copy recipe as text / print view.
+
+Shareable link to search (sync filters to URL).
+
+Simple local persistence of last used ingredients (localStorage).
+
+Deliver all of the above now. Produce clean, commented code.
