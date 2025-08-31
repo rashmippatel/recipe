@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Recipe {
+  id           String                @id @default(cuid())
+  name         String
+  isVeg        Boolean               @default(true)
+  cookTimeMin  Int
+  mealTypesCsv String
+  instructions String
+  sourceType   String
+  sourceUrl    String?
+  famous       Boolean               @default(false)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  ingredients  IngredientOnRecipe[]
+  favorites    Favorite[]
+}
+
+model Ingredient {
+  id       String                 @id @default(cuid())
+  name     String                 @unique
+  unit     String?
+  recipes  IngredientOnRecipe[]
+}
+
+model IngredientOnRecipe {
+  id           String      @id @default(cuid())
+  recipeId     String
+  ingredientId String
+  quantity     Float
+  recipe       Recipe      @relation(fields: [recipeId], references: [id])
+  ingredient   Ingredient  @relation(fields: [ingredientId], references: [id])
+
+  @@unique([recipeId, ingredientId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  recipeId  String   @unique
+  note      String?
+  createdAt DateTime @default(now())
+  recipe    Recipe   @relation(fields: [recipeId], references: [id])
+}
+
