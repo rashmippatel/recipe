@@ -98,7 +98,7 @@ export default function RecipeDetail({ recipeId }: RecipeDetailProps) {
           "@type": "Person",
           name: "Recipe Helper User",
         },
-        datePublished: recipe.createdAt?.toISOString().split("T")[0],
+        datePublished: recipe.createdAt ? new Date(recipe.createdAt).toISOString().split("T")[0] : undefined,
         description: recipe.instructions.substring(0, 200) + "...",
         prepTime: `PT${Math.floor(recipe.cookTimeMin / 2)}M`,
         cookTime: `PT${recipe.cookTimeMin}M`,

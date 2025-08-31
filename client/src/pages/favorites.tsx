@@ -28,8 +28,8 @@ export default function Favorites() {
   const queryClient = useQueryClient();
   
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [mealFilter, setMealFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [mealFilter, setMealFilter] = useState("all");
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeWithIngredients | null>(null);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<RecipeWithIngredients | null>(null);
@@ -85,11 +85,11 @@ export default function Favorites() {
       recipe.ingredients.some(ri => ri.ingredient.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
       recipe.sourceType.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesType = !typeFilter || 
+    const matchesType = !typeFilter || typeFilter === "all" ||
       (typeFilter === "vegetarian" && recipe.isVeg) ||
       (typeFilter === "non-vegetarian" && !recipe.isVeg);
     
-    const matchesMeal = !mealFilter || recipe.mealTypes.includes(mealFilter);
+    const matchesMeal = !mealFilter || mealFilter === "all" || recipe.mealTypes.includes(mealFilter);
     
     return matchesSearch && matchesType && matchesMeal;
   });
@@ -175,7 +175,7 @@ export default function Favorites() {
                 <SelectValue placeholder="All Types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Types</SelectItem>
+                <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="vegetarian">Vegetarian</SelectItem>
                 <SelectItem value="non-vegetarian">Non-Vegetarian</SelectItem>
               </SelectContent>
@@ -185,7 +185,7 @@ export default function Favorites() {
                 <SelectValue placeholder="All Meals" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Meals</SelectItem>
+                <SelectItem value="all">All Meals</SelectItem>
                 <SelectItem value="Breakfast">Breakfast</SelectItem>
                 <SelectItem value="Lunch">Lunch</SelectItem>
                 <SelectItem value="Evening Snack">Evening Snack</SelectItem>
